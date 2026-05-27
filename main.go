@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+
+	"github.com/Suryansh0301/pokedexcli/internal/pokeapi"
 )
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
-	globalConfig := &config{}
+	globalConfig := &pokeapi.Config{}
 	for {
 		fmt.Print("Pokedex > ")
 		if !scanner.Scan() {

@@ -1,42 +1,23 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"time"
+
+	"github.com/Suryansh0301/pokedexcli/internal/pokeapi"
 )
 
 const (
 	location_endpoint = "https://pokeapi.co/api/v2/location-area/"
 )
 
-var httpClient = &http.Client{
-	Timeout: 10 * time.Second,
-}
+var commands map[string]cliCommand
 
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(*config) error
+	callback    func(*pokeapi.Config) error
 }
-
-type config struct {
-	next     string
-	previous string
-}
-
-type locationResp struct {
-	Count    int    `json:"count"`
-	Next     string `json:"next"`
-	Previous string `json:"previous"`
-	Results  []struct {
-		Name string `json:"name"`
-	} `json:"results"`
-}
-
-var commands map[string]cliCommand
 
 func init() {
 	commands = map[string]cliCommand{
@@ -63,11 +44,11 @@ func init() {
 	}
 }
 
-func getCallback(command string) func(*config) error {
+func getCallback(command string) func(*pokeapi.Config) error {
 	if val, ok := commands[command]; ok {
 		return val.callback
 	}
-	return func(*config) error {
+	return func(*pokeapi.Config) error {
 		fmt.Println("Unknown command")
 		return nil
 	}
@@ -75,13 +56,13 @@ func getCallback(command string) func(*config) error {
 
 //handlers
 
-func commandExit(_ *config) error {
+func commandExit(_ *pokeapi.Config) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(_ *config) error {
+func commandHelp(_ *pokeapi.Config) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
 	for command := range commands {
@@ -90,50 +71,42 @@ func commandHelp(_ *config) error {
 	return nil
 }
 
-func commandMap(config *config) error {
-	if len(config.next) == 0 {
+func commandMap(config *pokeapi.Config) error {
+	endpoint := config.Next
+	if len(endpoint) == 0 {
 		fmt.Println("you're on the first page")
-		return mapCommand(config, location_endpoint)
+		endpoint = location_endpoint
 	}
-	return mapCommand(config, config.next)
 
-}
-
-func commandMapB(config *config) error {
-	if len(config.previous) == 0 {
-		fmt.Println("you're on the first page")
-		return mapCommand(config, location_endpoint)
-	}
-	return mapCommand(config, config.previous)
-
-}
-
-func mapCommand(config *config, endpoint string) error {
-	resp, err := httpClient.Get(endpoint)
+	client := pokeapi.NewClient()
+	resp, err := client.LocationAreas(config, endpoint)
 	if err != nil {
-		return fmt.Errorf("failed to fetch locations: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d from API", resp.StatusCode)
+		return err
 	}
 
-	var response locationResp
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if len(response.Results) == 0 {
-		fmt.Println("No locations found.")
-		return nil
-	}
-
-	config.next = response.Next
-	config.previous = response.Previous
-
-	for _, result := range response.Results {
+	for _, result := range resp.Results {
 		fmt.Println(result.Name)
 	}
 	return nil
+
+}
+
+func commandMapB(config *pokeapi.Config) error {
+	endpoint := config.Previous
+	if len(endpoint) == 0 {
+		fmt.Println("you're on the first page")
+		endpoint = location_endpoint
+	}
+
+	client := pokeapi.NewClient()
+	resp, err := client.LocationAreas(config, endpoint)
+	if err != nil {
+		return err
+	}
+
+	for _, result := range resp.Results {
+		fmt.Println(result.Name)
+	}
+	return nil
+
 }
